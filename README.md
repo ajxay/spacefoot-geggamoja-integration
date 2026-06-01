@@ -1,9 +1,9 @@
 # Geggamoja B2B Catalog API — Integration Guide for Spacefoot
 
-**Document version:** 1.0  
+**Document version:** 1.2  
 **Last updated:** 2026-06-01  
-**Audience:** Spacefoot Team   
-**Author:** Victory Mantra (Shopify Developer for Geggamoja)  
+**Audience:** Spacefoot engineering (backend, integrations, data)  
+**Author:** Victory Mantra (integration owner for Geggamoja)  
 **Status:** Draft for handoff — credentials and catalog membership are provisioned by Victory Mantra / Geggamoja
 
 ---
@@ -34,11 +34,11 @@ This document describes how **Spacefoot** can programmatically read **products**
 | Party | Role |
 |--------|------|
 | **Geggamoja** | Brand; products are sold via Shopify B2B and B2C |
-| **Victory Mantra** | Builds and operates Shopify stores / integrations for Geggamoja |
+| **Victory Mantra** | Builds and operates Shopify integrations for Geggamoja |
 | **Spacefoot** | Distribution partner ([spacefoot.com](https://spacefoot.com/)); expands Geggamoja into France. Holds a **B2B company account** on the Geggamoja B2B store and fulfills customer demand from the agreed catalog |
 | **Catalog** | **Spacefoot / France — EUR catalog** — curated subset of variants Spacefoot may sell |
 
-**Store (B2B):** `geggamojab2b`([geggamojab2b.com](https://geggamojab2b.com/))  
+**Store (B2B):** `geggamojab2b`  
 **Admin catalog (reference):** [Euro catalog in Shopify Admin](https://admin.shopify.com/store/geggamojab2b/catalogs/88934580363)  
 **Numeric catalog ID:** `88934580363`  
 **GraphQL catalog GID (initial):** `gid://shopify/Catalog/88934580363`  
@@ -53,7 +53,7 @@ This document describes how **Spacefoot** can programmatically read **products**
 | Price list (EUR) | `gid://shopify/PriceList/26895024267` |
 | Primary stock location (sample) | `gid://shopify/Location/80575266955` |
 
-Product assortment for Spacefoot is **managed in this catalog** by Geggamoja. API consumers should treat **catalog publication membership** as the source of truth for “which SKUs Spacefoot may offer,” not the full shop product list.
+Product assortment for Spacefoot is **managed in this catalog** by Geggamoja / Victory Mantra. API consumers should treat **catalog publication membership** as the source of truth for “which SKUs Spacefoot may offer,” not the full shop product list.
 
 ---
 
@@ -98,11 +98,11 @@ Official references:
 
 | Requirement | Notes |
 |-------------|--------|
-| Shopify **custom app** on `geggamojab2b` | Created by Victory Mantra; Spacefoot receives credentials via secure channel |
-| **Admin API access token** | Static token for custom app, or OAuth if a public app is used (not expected here) |
-| **API version** | Pin a stable version, e.g. `2025-10`. Do not use `unstable` in production |
-
-
+| Shopify **custom app** on `geggamojab2b` | **Already created by Victory Mantra** (scopes configured). Spacefoot does **not** create or install an app |
+| **Admin API access token** | **Provided by Victory Mantra** via secure channel. Spacefoot stores it and calls the API |
+| **API version** | Agreed with Victory Mantra (e.g. `2025-10`). Spacefoot pins this in the request URL |
+| **TLS** | All requests over HTTPS |
+| **IP allowlisting** | If required, Spacefoot sends egress IPs to Victory Mantra — no Shopify Admin setup on Spacefoot’s side |
 
 ---
 
@@ -119,7 +119,8 @@ X-Shopify-Access-Token: <ADMIN_API_ACCESS_TOKEN>
 Replace `2025-10` with the agreed API version.
 
 ### 5.2 Environment variables (example)
-Victory Mantra provides these values when handing off credentials (Spacefoot loads them into vault / .env — no Shopify Admin work required):
+
+Victory Mantra provides these values when handing off credentials (Spacefoot loads them into vault / `.env` — no Shopify Admin work required):
 
 ```bash
 SHOPIFY_SHOP_DOMAIN=geggamojab2b.myshopify.com
@@ -134,8 +135,8 @@ SHOPIFY_PRICE_LIST_GID=gid://shopify/PriceList/26895024267
 **Security**
 
 - Treat `SHOPIFY_ADMIN_ACCESS_TOKEN` as a **secret** (vault, not git).
-- The token is already scoped by Victory Mantra (see §6 for reference).
-- Rotate token on compromise; contact Victory Mantra for re-issue.
+- The token is already scoped read-only by Victory Mantra (see §6 for reference).
+- Rotate token on compromise; contact Victory Mantra for re-issue — Spacefoot cannot change app scopes in Admin.
 
 ### 5.3 Request wrapper (example: Node.js)
 
@@ -218,7 +219,7 @@ query ShopPing {
 > **Spacefoot action required:** **None** for app creation, scope selection, or installation in Shopify Admin.  
 > Victory Mantra has **already created** the custom app on `geggamojab2b`, enabled the scopes below, and will **share the Admin API credentials** (access token, shop domain, API version, catalog GIDs) securely. Spacefoot only **uses** the token in API requests.
 
-This section documents what the issued token is allowed to do, useful for debugging `ACCESS_DENIED` errors. If a query fails for missing scope, contact **Victory Mantra** 
+This section documents what the issued token is allowed to do, useful for debugging `ACCESS_DENIED` errors. If a query fails for missing scope, contact **Victory Mantra** — do not attempt to change app permissions in Shopify.
 
 ### Scopes enabled on the shared app (read-only)
 
@@ -235,6 +236,7 @@ May also be included on the token (no extra setup needed on Spacefoot’s side):
 |--------|---------|
 | `read_locations` | Fulfillment location names in inventory responses |
 
+**Intentionally not granted** (orders, customers, writes): `write_*`, `read_orders`, `read_customers`, `read_companies`.
 
 ### What Spacefoot receives from Victory Mantra
 
@@ -243,9 +245,9 @@ May also be included on the token (no extra setup needed on Spacefoot’s side):
 | `SHOPIFY_SHOP_DOMAIN` | e.g. `geggamojab2b.myshopify.com` |
 | `SHOPIFY_ADMIN_API_VERSION` | e.g. `2025-10` |
 | `SHOPIFY_ADMIN_ACCESS_TOKEN` | Admin API access token for the custom app |
-| Catalog / publication / price list GIDs | See §2 |
+| Catalog / publication / price list GIDs | See §2 — optional in handoff pack |
 
-Optional later (if incremental sync is needed): webhook endpoint URL registration may be done by Victory Mantra or documented separately; Spacefoot can provide the HTTPS receiver.
+Optional later (if incremental sync is agreed): webhook endpoint URL registration may be done by Victory Mantra or documented separately; Spacefoot only hosts the HTTPS receiver.
 
 ---
 
@@ -427,7 +429,7 @@ If `publication` is `null`, contact Victory Mantra — assortment rules may fall
 
 ---
 
-### Phase B — List products in the Spacefoot (EUR) catalog
+### Phase B — List products in the Spacefoot catalog
 
 Use the publication’s product connection. Prefer **`includedProducts`** (and filter in your pipeline) or the publication’s product listing fields available on your pinned API version.
 
@@ -1172,6 +1174,20 @@ Bulk is **asynchronous** (minutes) but avoids deep pagination throttling. Victor
 ---
 
 ## 11. Incremental updates (webhooks)
+
+If incremental sync is used, webhook subscriptions are **registered by Victory Mantra** on the shared custom app (Spacefoot does not configure the app in Shopify Admin). Spacefoot provides the HTTPS endpoint and verifies HMAC:
+
+| Topic | Use |
+|--------|-----|
+| `inventory_levels/update` | Near–real-time stock changes |
+| `products/update` | Title, status, variant changes |
+| `products/delete` | Remove from local cache |
+
+**Payload handling**
+
+- Verify HMAC (`X-Shopify-Hmac-Sha256`) with the app **client secret**.  
+- Respond `200` quickly; process async.  
+- Webhook gives you *that* inventory item / product — re-fetch variant + catalog membership if needed.
 
 Webhook reference: [Shopify webhooks](https://shopify.dev/docs/apps/build/webhooks).
 
