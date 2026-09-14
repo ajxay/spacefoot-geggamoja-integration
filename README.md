@@ -1,6 +1,6 @@
 # Geggamoja B2C Product API — Integration Guide for Spacefoot
 
-**Document version:** 2.4  
+**Document version:** 2.5  
 **Last updated:** 2026-09-14  
 **Audience:** Spacefoot Team (backend, integrations, data)  
 **Author:** Victory Mantra (Shopify Developer for Geggamoja)  
@@ -56,6 +56,7 @@ This document describes how **Spacefoot** can programmatically read **products**
 | Total products | ~2,092 |
 | **Active & published products (sellable assortment)** | **~875** |
 | EUR pricing | Available via France market → `contextualPricing(context: { country: FR })` |
+| Primary stock location | **Shelfless AB** — `gid://shopify/Location/103367115096` |
 
 > The B2C store has no B2B-style "catalog / publication / price list". The assortment Spacefoot should import is simply the store's **active, published** products (§7.2).
 
@@ -293,7 +294,7 @@ Shopify GraphQL uses GIDs. Real B2C examples:
 gid://shopify/Product/15255708991832
 gid://shopify/ProductVariant/55536418980184
 gid://shopify/InventoryItem/55151138111832
-gid://shopify/Location/103367115096
+gid://shopify/Location/103367115096   ← Shelfless AB (primary stock)
 ```
 
 REST numeric IDs map via `legacyResourceId` on many objects.
@@ -471,7 +472,7 @@ query SpacefootProducts(
 }
 ```
 
-> Add `location { name }` only if the token has `read_locations`; otherwise the query fails on that field (see §11).
+> Stock for display: match `location.id` to **Shelfless AB** `gid://shopify/Location/103367115096` (see §8 C.2). Querying `location { name }` is optional.
 
 **Variables:**
 
@@ -573,7 +574,7 @@ query SpacefootProducts(
 | `price_eur` / `compare_at_eur` | `contextualPricing.price` / `.compareAtPrice` (`FR`) — RRP / selling, **not** wholesale |
 | `price_sek` | `variant.price` (reference only) |
 | `purchase_price_eur` | **Not available** — Spacefoot does not consume B2B APIs |
-| `available_qty` | inventory level `available` at the stock location |
+| `available_qty` | inventory level `available` at **Shelfless AB** (`gid://shopify/Location/103367115096`) |
 | `inventory_status` | derived enum (§8 Phase C.4) |
 
 **Pagination**
@@ -615,7 +616,16 @@ EUR is already included per variant in Phase A via `contextualPricing(context: {
 
 #### C.2 Location-level quantities
 
-Quantities come back per location in Phase A (`inventoryItem.inventoryLevels`). To fetch a single item:
+Quantities come back per location in Phase A (`inventoryItem.inventoryLevels`). For Spacefoot's display stock, use this location:
+
+| Field | Value |
+|-------|-------|
+| **Location name** | `Shelfless AB` |
+| **Location GID** | `gid://shopify/Location/103367115096` |
+
+Match `inventoryLevels.nodes[].location.id` to that GID and read `available` from that node. You do not need to query `location { name }` — the name is given here.
+
+To fetch a single item:
 
 ```graphql
 query VariantInventory($inventoryItemId: ID!) {
@@ -632,8 +642,6 @@ query VariantInventory($inventoryItemId: ID!) {
   }
 }
 ```
-
-Victory Mantra will confirm which **location ID** represents stock relevant to Spacefoot. (Location **names** require `read_locations`; without it, match by the location **ID** Victory Mantra provides — e.g. `gid://shopify/Location/103367115096`.)
 
 #### C.3 Inventory states reference
 
@@ -774,8 +782,9 @@ Variant
   price_sek                      (reference only)
   purchase_price_eur             (not available — B2B APIs are not in this integration)
   inventory_status               (derived enum)
-  available_qty                  (per agreed location)
-  location_id                    (location_name only if read_locations granted)
+  available_qty                  (Shelfless AB — gid://shopify/Location/103367115096)
+  location_id                    (gid://shopify/Location/103367115096)
+  location_name                  (Shelfless AB)
   raw_quantities                 (json: available, on_hand, committed, …)
   last_synced_at
 ```
@@ -846,6 +855,7 @@ Contact Victory Mantra / Geggamoja for B2B portal access, wholesale pricing, and
 | 2.2 | 2026-09-14 | Material composition: `custom.material` as source of truth, plus optional `shopify.fabric` / `shopify.footwear-material` labels |
 | 2.3 | 2026-09-14 | Wholesale / purchase price is **not** available: this integration does not consume B2B APIs |
 | 2.4 | 2026-09-14 | Front-matter notice: this document **replaces** the v1.x B2B-catalog guide; product API is B2C-only, not connected to B2B APIs |
+| 2.5 | 2026-09-14 | Primary stock location documented: **Shelfless AB** / `gid://shopify/Location/103367115096` |
 
 ---
 
